@@ -1,7 +1,6 @@
 # Path to your oh-my-zsh installation.
 export ZSH="/home/falk/.oh-my-zsh"
 export MANPATH="/usr/local/man:$MANPATH"
-export LANG=en_US.UTF-8 # TODO: investigate
 
 # Theme {{{
 # Set name of the theme to load --- if set to "random", it will
@@ -18,7 +17,7 @@ ZSH_THEME="falk"
 # ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
 # Theme }}}
 # Completion {{{
- 
+
 # Uncomment the following line to use case-sensitive completion.
 # CASE_SENSITIVE="true"
 
@@ -45,7 +44,7 @@ DISABLE_AUTO_UPDATE="true"
 # export UPDATE_ZSH_DAYS=13
 
 # Updates }}}
-# Misc {{{
+# Misc {{{{{{
 # Uncomment the following line if pasting URLs and other text is messed up.
 # DISABLE_MAGIC_FUNCTIONS=true
 
@@ -67,11 +66,11 @@ DISABLE_AUTO_UPDATE="true"
 
 # Would you like to use another custom folder than $ZSH/custom?
 # ZSH_CUSTOM=/path/to/new-custom-folder
-# Misc }}}
+# Misc }}}}}}
 # Auxilary Support Functions {{{
    # arg1    str    string to highlight
    function _HL () {
-      printf "\033[1m%s\033[0m" $1
+      printf "\033[1;38;5;222m%s\033[0m" $1
    }
    
    # arg 1:  R;G;B   new FG
@@ -112,14 +111,32 @@ DISABLE_AUTO_UPDATE="true"
 # Plugins {{{
 
 # Standard plugins can be found in ~/.oh-my-zsh/plugins/*
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
+# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/{{{}}}
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git)
 source $ZSH/oh-my-zsh.sh
 # Plugins }}}
 # Scripts {{{
-# Move & Link {{{
+# VPN {{{
+function vpn() {
+   if [ $# -eq 0 ] || [ "$1" = "status" ]; then
+      nordvpn status | sed '1 i\ ' | sed -r "s/(.*:)/    $(tput setaf 254)\1$(tput setaf 246)/g; s/Connected/$(tput setaf 2)Connected\!$(tput sgr0)/; s/Disconnected/$(tput setaf 203)Disconnected\!/"
+   elif [ "$1" = "reconnect" ] || [ "$1" = "rc" ]; then
+      nordvpn disconnect > /dev/null; echo "\nReconnecting...";
+      if [ $# -eq 2 ]; then
+         nordvpn connect $2
+      else
+         nordvpn connect
+      fi
+   elif [ "$1" = "disconnect" ] || [ "$1" = "dc" ]; then
+      nordvpn disconnect | sed '1 i\ ' | sed '/^How/d' | sed "s/You are not connected to NordVPN/    $(tput setaf 245)You are not connected/g; s/You are disconnected from NordVPN/    $(tput setaf 245)You are disconnected/g"
+   else
+      echo ""; nordvpn connect $1
+   fi
+}
+# }}}
+# Move &  Link {{{
 function mvl() {
    set -e
    original="$1" target="$2"
@@ -253,12 +270,12 @@ function rune () {
 # Rune }}}
 # Runes {{{
 function runes () {
-   printf "Listing all currently marked runes:\n"
-   for i in "${!runebook[@]}"
+   printf "\n$(tput setaf 231) Listing all currently marked runes:$(tput sgr0)\n"
+   for i in "${(@k)runebook}"
    do
       local name=$i
       local destination=${runebook[$i]}
-      printf "   %-18s %s\n" \'$(_HL $name)\' \'$(_HL $destination)\'
+      printf "   %-18s %s\n" "$name" "$(_HL $destination)"
    done
 }
 # Runes }}}
@@ -272,6 +289,15 @@ function runes () {
       wget -U "Mozilla/5.0" -qO - "http://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$2&dt=t&q=$(echo $1 | sed "s/[\"'<>]//g")" | sed "s/,,,0]],,.*//g" | awk -F'"' '{print $2, $6}';
    }
 # Translate }}}
+# ccat {{{
+   # Prints code files with syntax highlighting, step navigation, and line numbers
+   ccat() {
+      pygmentize -f terminal -g -O linenos=1 $*
+   }
+   ccl() {
+      ccat $* | less -R
+   }
+# ccat }}}
 # fawk {{{
    # Prints a word from a certain column of the output when piping.
    # Example: cat /path/to/file.txt | fawk 2 --> Print every 2nd word in each line.
@@ -372,6 +398,18 @@ function 2gif() {
    fi
    rm -r "/tmp/gif"
 }
+
+ai2svg() {
+   local d
+   local svg
+   for d in *.ai; do
+      d=$(echo "$(cd "$(dirname "$d")"; pwd)/$(basename "$d")")
+      svg=$(echo "$d" | sed 's/.ai/.svg/')
+      echo "Creating $svg ..."
+      inkscape -f "$d" -l "$svg"
+   done
+}
+
 # Conversion }}}
 # Scripts }}}
 # User config {{{
@@ -390,18 +428,43 @@ kitty + complete setup zsh | source /dev/stdin
 if [[ -n $SSH_CONNECTION ]]; then
   export EDITOR='vim'
 else
-  export EDITOR='mvim'
+  export EDITOR='nvim'
 fi
 # Editor Preference }}}
 # Compilation flags {{{
 # export ARCHFLAGS="-arch x86_64"
 # Compilation Flags }}}
 # Aliases {{{
+alias show="kitty +kitten icat"
+# # Font Installer {{{
+alias install-fonts="sudo mv ~/Downloads/fonts/* /usr/share/fonts ; fc-cache"
+# Font Installer }}}
 # Zsh {{{
 alias zshedit="nvim ~/.zshrc"
 alias ohmyzsh="nvim ~/.oh-my-zsh"
 alias zshreload="source ~/.zshrc"
 # Zsh }}}
+# User Safety {{{
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+# User Safety}}}
+# Navigation {{{
+# Find {{{
+alias f='find . -type f -regex '
+# Find }}}
+# Tree {{{
+function pretty_tree() {
+   local args
+   # if only one argument that's a number, assume it's the desired depth
+   if [[ $1 =~ '^[0-9]+$' ]]; then
+      tree -L $* -l -q -v --dirsfirst -C | sed -e 's/^/ /g; s/├── /├─● /g; s/└── /└─● /g; s/  / /g; s/  / /g'
+   else
+      tree $* -l -q -v --dirsfirst -C | sed -e 's/^/ /g; s/├── /├─● /g; s/└── /└─● /g; s/  / /g; s/  / /g'
+   fi
+}
+alias T=pretty_tree
+# Tree }}}
 # LS {{{
 alias ll='ls -l'
 alias la='ls -A'
@@ -412,22 +475,14 @@ alias sl='ls'
 alias l='ls -CF'
 alias s='ls'
 # LS }}}
-# VPN {{{{{{
-alias vpn='nordvpn'
-alias reconnect='vpn disconnect; vpn connect'
-# }}}}}}
-# User Safety {{{
-alias rm='rm -i'
-alias cp='cp -i'
-alias mv='mv -i'
-# User Safety}}}
-# Navigation {{{
+# Path {{{
 alias 'home'='cd ~/'
 alias cd..='cd ..'
 alias ..="cd .."
 alias ...="cd ../.."
 alias ....="cd ../../.."
 alias .....="cd ../../../.."
+# Path }}}
 # Navigation }}}
 # Clear {{{
 alias cl='clear'
@@ -438,7 +493,7 @@ alias remake='make remake | grep -v "## *\|()"'
 # Make }}}
 # Git {{{
 alias gs='git status'
-alias gc=' git commit'
+alias gc='git commit'
 # ssh clones repo in arg $1
 function gC () {
    git clone git@github.com:$1
@@ -471,12 +526,14 @@ alias grm='git rm'
 alias logs="sudo find /var/log -type f -exec file {} \; | grep 'text' | cut -d' ' -f1 | sed -e's/:$//g'"
 # Logs }}}
 # Programs {{{
+alias discord-tui='TERM=xterm-truecolor 6cord -u frigatzi@gmail.com -p 4Mqlj8is!!Hkd00d!! --properties.sidebar-ratio 2 --properties.chat-padding 1 --properties.show-emoji-urls false --properties.foreground-color 252 --properties.command-prefix "[::b][\${GUILD} \${CHANNEL}][::-][#FF00FF] " --properties.author-format "[#{color}::b]{name}: " --properties.default-status "Type here..."'
 alias r=ranger
 alias busy="cat /dev/urandom | hexdump -C | grep 'ca fe'"
 alias diskspace="du -S | sort -n -r | less"
 alias blender='optirun /opt/blender-2.80/blender'
 alias subtex3='/opt/sublime_text/sublime_text'
 alias rec='recall'
+alias lc='lolcat'
 # Programs }}}
 # Color Support {{{
 if [ -x /usr/bin/dircolors ]; then
@@ -513,7 +570,8 @@ export PYTHONPATH="${PYTHONPATH}:/home/falk/.local/bin"
 
 export PATH=$HOME/bin:/usr/local/bin:$PATH
 export PATH=$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH
-export PATH=/home/falk/.local/bin:/sbin/:/usr/local/sbin:$PATH
+export PATH=$HOME/.gem/ruby/2.7.0/bin:$PATH
+export PATH=$HOME/.local/bin:/sbin/:/usr/local/sbin:$PATH
 # remove duplicate path entries
 PATH=$(printf "%s" "$PATH" | awk -v RS=':' '!a[$1]++ { if (NR > 1) printf RS; printf $1 }')
 # Path Additions }}}
